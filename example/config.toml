@@ -1,0 +1,3 @@
+[Bluetooth]
+Name = "/dev/cu.Sphero-YBR-RN-SPP"
+Baud = 115200
