@@ -22,16 +22,18 @@ func main() {
 		panic(err)
 	}
 
-	fmt.Println("Connected")
-
-	ping := make(chan interface{})
+	fmt.Println("Pinging...")
+	ping := make(chan *sphero.Response)
 	s.Ping(ping)
+	pong := <-ping
+	fmt.Printf("Pong %#x\n", pong)
 
-	fmt.Println("Waiting...")
-	<-time.Tick(10 * time.Second)
+	sleep := make(chan *sphero.Response)
+	s.Sleep(time.Duration(0), 0, 0, sleep)
+	slept := <-sleep
+	fmt.Printf("Slept %#x\n", slept)
 
 	fmt.Println("Closing...")
 	s.Close()
-
 	fmt.Println("Done.")
 }

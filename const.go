@@ -149,12 +149,6 @@ const (
 )
 
 /*
-Sleep()
-
-SetRGBLEDOutput()
-SetBackLEDOutput()
-GetRGBLED()
-
 SetDataStreaming()
 ConfigureCollisionDetection()
 ConfigureLocator()
@@ -185,9 +179,4 @@ SetRawMotorValues() */
 	dlenLSB,
 	data,
 	chk []byte
-} */
-
-/* func (s *Sphero) Sleep(wakeup time.Duration, macro uint16, orbBasic uint16) error {
-	// DID_CORE
-	// CMD_SLEEP
 } */

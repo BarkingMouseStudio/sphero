@@ -4,11 +4,19 @@ import (
 	"bytes"
 	"encoding/binary"
 	"fmt"
-	serial "github.com/tarm/goserial"
+	serial "github.com/Freeflow/goserial"
 	"io"
-	"os"
-	"syscall"
+	"time"
 )
+
+func computeChk(data []byte) uint8 {
+	sum := 0
+	for _, b := range data {
+		sum += int(uint8(b))
+	}
+	chk := (sum % 256) ^ 0xff
+	return uint8(chk)
+}
 
 type Config struct {
 	Bluetooth serial.Config
@@ -25,7 +33,10 @@ type Sphero struct {
 	seq uint8
 
 	// Map of response channels to sequence numbers
-	res map[uint8]chan<- interface{}
+	res map[uint8]chan<- *Response
+
+	// Channel used to signal that the listen goroutine should stop
+	kill chan bool
 
 	// Async response channel
 	async chan<- interface{}
@@ -42,7 +53,8 @@ func NewSphero(conf *Config, async chan<- interface{}) (*Sphero, error) {
 		conf:  conf,
 		conn:  conn,
 		seq:   0,
-		res:   make(map[uint8]chan<- interface{}),
+		res:   make(map[uint8]chan<- *Response),
+		kill:  make(chan bool, 1),
 		async: async,
 	}
 
@@ -79,6 +91,10 @@ type Response struct {
 }
 
 func (s *Sphero) parse(buf []byte) (n int, err error) {
+	if len(buf) < 2 {
+		return
+	}
+
 	sop1 := buf[0]
 
 	if sop1 != SOP1 {
@@ -118,18 +134,14 @@ func (s *Sphero) parse(buf []byte) (n int, err error) {
 
 		// Calculate the chk
 		chkSlice := buf[2:dataEnd]
-		sum := 0
-		for b := range chkSlice {
-			sum += int(b)
-		}
-		compChk := (sum % 256) ^ 0xff
+		compChk := computeChk(chkSlice)
 
 		chkBuf := bytes.NewBuffer([]byte{buf[dataEnd]})
 		var chk uint8
 		binary.Read(chkBuf, binary.BigEndian, &chk)
 
-		if compChk != int(chk) {
-			err = fmt.Errorf("Invalid check, expected %v, got %v", chk, compChk)
+		if compChk != chk {
+			err = fmt.Errorf("Invalid check, expected %#x, got %#x", chk, compChk, buf[2:dataEnd])
 			return
 		}
 
@@ -137,59 +149,71 @@ func (s *Sphero) parse(buf []byte) (n int, err error) {
 		if res, ok := s.res[seq]; ok {
 			res <- r
 		}
-		return int(dataEnd) + 1, nil
+		n = int(dataEnd) + 1
 	case SOP2_ASYNC:
 		if len(buf) < 7 {
 			fmt.Println("Async buffer too short, waiting for more", buf)
 		}
+		n = 1
+		/* ID_CODE = buffer[2]
+		   dlen = buffer.readUInt16BE(3)
+		   if buffer.length < dlen + 5 {
+		     return
+		   }
+		   startOfData = 5
+		   dataEnd = startOfData + (dlen - 1)
+		   endOfPacket = endOfData + 1
+		   DATA = buffer.slice(startOfData, endOfData)
+		   // msg = SOP2: SOP2, ID_CODE: ID_CODE, DATA: DATA
+		   r := &AsyncResponse{[]byte{sop1}, []byte{sop2}, []byte{id}, []byte{data}}
+		   s.async <- r
+		   n = int(dataEnd) + 1
+		 } */
 	default:
-		err = fmt.Errorf("Unexpected SOP2, should be %v or %v but got %v", SOP2_ANSWER, SOP2_ASYNC, sop2)
+		err = fmt.Errorf("Unexpected SOP2, should be %#x or %#x but got %#x", SOP2_ANSWER, SOP2_ASYNC, sop2)
+		n = 1 // Chomp 1 byte and maybe we'll recover
 	}
 	return
 }
 
 func (s *Sphero) listen() {
-	defer func() {
-		if r := recover(); r != nil {
-			fmt.Println(r)
-		}
-	}()
-
 	var data []byte
 	var buf []byte
 	var err error
 	var n int
 
 	for {
-		// Read data from the Sphero
-		data = make([]byte, 256)
-		if n, err = s.Read(data); err != nil {
-			fmt.Println("Failed reading, panicking")
-			panic(err)
-		}
+		select {
+		case <-s.kill:
+			fmt.Println("Killing goroutine")
+			return
+		default:
+			// Read data from the Sphero
+			data = make([]byte, 256)
+			if n, err = s.Read(data); err != nil {
+				fmt.Println("Read:", err)
+				return
+			}
 
-		// We didn't receive any data
-		if n == 0 {
-			fmt.Println("Read no data")
-			continue
-		}
+			// We didn't receive any data
+			if n == 0 {
+				continue
+			}
 
-		data = data[:n]
-		fmt.Println("Read data", data)
+			data = data[:n]
 
-		// Append the new data to our buffer
-		buf = append(buf, data...)
+			// Append the new data to our buffer
+			buf = append(buf, data...)
 
-		fmt.Println("Buffer added", buf)
+			// Attempt to parse the buf
+			if n, err = s.parse(buf); err != nil {
+				fmt.Println("Parse:", err)
+			}
 
-		// Attempt to parse the buf
-		if n, err = s.parse(buf); err != nil {
-			panic(err)
-		}
-
-		// We successfully parsed data, trim our buffer
-		if n > 0 {
-			buf = buf[n:]
+			// We successfully parsed data, trim our buffer
+			if n > 0 {
+				buf = buf[n:]
+			}
 		}
 	}
 }
@@ -198,6 +222,7 @@ func (s *Sphero) listen() {
 
 // Implement io.Closer
 func (s *Sphero) Close() error {
+	s.kill <- true // Kill our goroutine
 	return s.conn.Close()
 }
 
@@ -211,32 +236,48 @@ func (s *Sphero) Read(data []byte) (int, error) {
 	return s.conn.Read(data)
 }
 
-func (s *Sphero) Send() error {
-	return nil
-}
-
-func (s *Sphero) Ping(res chan<- interface{}) error {
+func (s *Sphero) Send(did, cid uint8, data []byte, res chan<- *Response) error {
 	s.seq++
 	s.res[s.seq] = res
 
-	var data []byte
 	var buf bytes.Buffer
 	buf.Write([]byte{SOP1})                                  // SOP1
 	buf.Write([]byte{SOP2_ANSWER})                           // SOP2
-	buf.Write([]byte{DID_CORE})                              // DID
-	buf.Write([]byte{CMD_PING})                              // CID
-	binary.Write(&buf, binary.BigEndian, uint8(0x52))        // SEQ
+	buf.Write([]byte{did})                                   // DID
+	buf.Write([]byte{cid})                                   // CID
+	binary.Write(&buf, binary.BigEndian, s.seq)              // SEQ
 	binary.Write(&buf, binary.BigEndian, uint8(len(data)+1)) // DLEN
+	buf.Write(data)                                          // <data>
 
-	// Calculate the chk
-	chkBytes := buf.Bytes()[2:buf.Len()]
-	sum := 0
-	for _, b := range chkBytes {
-		sum += int(uint8(b))
-	}
-	chk := (sum % 256) ^ 0xff
-	binary.Write(&buf, binary.BigEndian, uint8(chk)) // DLEN
+	chk := computeChk(buf.Bytes()[2:buf.Len()])
+	binary.Write(&buf, binary.BigEndian, chk) // DLEN
+
+	fmt.Printf("Writing %#x\n", buf.Bytes())
 
 	_, err := s.Write(buf.Bytes())
 	return err
+}
+
+func (s *Sphero) Sleep(wakeup time.Duration, macro uint8, orbBasic uint16, res chan<- *Response) error {
+	var data bytes.Buffer
+	binary.Write(&data, binary.BigEndian, uint16(wakeup))
+	binary.Write(&data, binary.BigEndian, macro)
+	binary.Write(&data, binary.BigEndian, orbBasic)
+	return s.Send(DID_CORE, CMD_SLEEP, data.Bytes(), res)
+}
+
+func (s *Sphero) Ping(res chan<- *Response) error {
+	return s.Send(DID_CORE, CMD_PING, []byte{}, res)
+}
+
+func (s *Sphero) SetRGBLEDOutput() error {
+	return s.Send(DID_CORE, CMD_PING, []byte{}, res)
+}
+
+func (s *Sphero) SetBackLEDOutput() error {
+	return s.Send(DID_CORE, CMD_PING, []byte{}, res)
+}
+
+func (s *Sphero) GetRGBLED() error {
+	return s.Send(DID_CORE, CMD_PING, []byte{}, res)
 }
