@@ -148,35 +148,47 @@ const (
 	POWER_MASK_TIMESINCECHG = 0x06 // Seconds awake since last recharge (unsigned 16-bit value)
 )
 
-/*
-SetDataStreaming()
-ConfigureCollisionDetection()
-ConfigureLocator()
+// Data Streaming Masks
 
-SetHeading()
-SetRotationRate()
-SelfLevel()
-ReadLocator()
-Roll()
-SetRawMotorValues() */
+const (
+	ACCEL_AXIS_X_RAW = 0x80000000
+	ACCEL_AXIS_Y_RAW = 0x40000000
+	ACCEL_AXIS_Z_RAW = 0x20000000
 
-/* type Command struct {
-	sop1, // Start of Packet #1 - Always FFh
-	sop2, // Start of Packet #2 - F8 to FFh encoding 4 bits of per-message options (see below)
-	did, // Device ID - The virtual device this packet is intended for
-	cid, // Command ID - The command code
-	seq, // Sequence Number - This client field is echoed in the response for all synchronous commands (and ignored by Sphero when SOP2 has bit 0 clear)
-	dlen, // Data Length - The number of bytes following through the end of the packet
-	data, // Data - Optional data to accompany the Command
-	chk []byte // The modulo 256 sum of all the bytes from the DID through the end of the data payload, bit inverted (1's complement)
-} */
+	GYRO_AXIS_X_RAW = 0x10000000
+	GYRO_AXIS_Y_RAW = 0x08000000
+	GYRO_AXIS_Z_RAW = 0x04000000
 
-/* type AsyncResponse struct {
-	sop1,
-	sop2,
-	idCode,
-	dlenMSB,
-	dlenLSB,
-	data,
-	chk []byte
-} */
+	MOTOR_RIGHT_EMF_RAW = 0x00400000
+	MOTOR_LEFT_EMF_RAW  = 0x00200000
+
+	MOTOR_LEFT_PWM_RAW  = 0x00100000
+	MOTOR_RIGHT_PWM_RAW = 0x00080000
+
+	IMU_PITCH_ANGLE_FILTERED = 0x00040000
+	IMU_ROLL_ANGLE_FILTERED  = 0x00020000
+	IMU_YAW_ANGLE_FILTERED   = 0x00010000
+
+	ACCEL_AXIS_X_FILTERED = 0x00008000
+	ACCEL_AXIS_Y_FILTERED = 0x00004000
+	ACCEL_AXIS_Z_FILTERED = 0x00002000
+
+	GYRO_AXIS_X_FILTERED = 0x00001000
+	GYRO_AXIS_Y_FILTERED = 0x00000800
+	GYRO_AXIS_Z_FILTERED = 0x00000400
+
+	MOTOR_RIGHT_EMF_FILTERED = 0x00000040
+	MOTOR_LEFT_EMF_FILTERED  = 0x00000020
+)
+
+const (
+	QUATERNION_Q0 = 0x80000000
+	QUATERNION_Q1 = 0x40000000
+	QUATERNION_Q2 = 0x20000000
+	QUATERNION_Q3 = 0x10000000
+	ODOMETER_X    = 0x08000000
+	ODOMETER_Y    = 0x04000000
+	ACCEL_ONE     = 0x02000000
+	VELOCITY_X    = 0x01000000
+	VELOCITY_Y    = 0x00800000
+)
