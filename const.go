@@ -150,6 +150,7 @@ const (
 
 // Data Streaming Masks
 
+// MASK1
 const (
 	ACCEL_AXIS_X_RAW = 0x80000000
 	ACCEL_AXIS_Y_RAW = 0x40000000
@@ -181,6 +182,7 @@ const (
 	MOTOR_LEFT_EMF_FILTERED  = 0x00000020
 )
 
+// MASK2
 const (
 	QUATERNION_Q0 = 0x80000000
 	QUATERNION_Q1 = 0x40000000
