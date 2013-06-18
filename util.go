@@ -10,7 +10,7 @@ func ApplyMasks32(masks []uint32) uint32 {
 }
 
 // Computes the modulo 256 sum of the bytes, bit inverted (1's complement)
-func ComputeChk(data []byte) uint8 {
+func computeChk(data []byte) uint8 {
 	sum := 0
 	for _, b := range data {
 		sum += int(uint8(b))

@@ -1,5 +1,3 @@
-// TODO: Better read stability
-// TODO: SetDataStreaming
 // TODO: Better response interface
 package sphero
 
@@ -9,6 +7,8 @@ import (
 	"fmt"
 	serial "github.com/Freeflow/goserial"
 	"io"
+	"os"
+	"syscall"
 	"time"
 )
 
@@ -18,10 +18,10 @@ type Sphero struct {
 	seq   uint8
 	res   map[uint8]chan<- *Response
 	kill  chan bool
-	async chan<- interface{}
+	async chan<- *AsyncResponse
 }
 
-func NewSphero(conf *Config, async chan<- interface{}) (*Sphero, error) {
+func NewSphero(conf *Config, async chan<- *AsyncResponse) (*Sphero, error) {
 	var conn io.ReadWriteCloser
 	var err error
 	if conn, err = serial.OpenPort(&conf.Bluetooth); err != nil {
@@ -43,10 +43,6 @@ func NewSphero(conf *Config, async chan<- interface{}) (*Sphero, error) {
 }
 
 func (s *Sphero) parse(buf []byte) (n int, err error) {
-	if len(buf) < 2 {
-		return
-	}
-
 	sop1 := buf[0]
 
 	if sop1 != SOP1 {
@@ -58,77 +54,103 @@ func (s *Sphero) parse(buf []byte) (n int, err error) {
 
 	switch sop2 {
 	case SOP2_ANSWER:
-		if len(buf) < 6 {
-			fmt.Println("Answer buffer too short, waiting for more", buf)
+		var r *Response
+		r.sop1 = sop1
+		r.sop2 = sop2
+		r.mrsp = buf[2]
+
+		packetBuf := bytes.NewBuffer(buf)
+
+		// Skip the SOP bytes and MRSP
+		packetBuf.Next(3)
+
+		binary.Read(packetBuf, binary.BigEndian, &r.seq)
+		binary.Read(packetBuf, binary.BigEndian, &r.dlen)
+
+		dataStart := 5
+
+		/*
+			We haven't read enough data yet to finish parsing this message, we'll wait
+			for more.
+		*/
+		if len(buf) < int(r.dlen)+dataStart {
 			return
 		}
 
-		// TODO: All of these buffer reads are ugly and terrible
-		dlenBuf := bytes.NewBuffer([]byte{buf[4]})
-		var dlen uint8
-		binary.Read(dlenBuf, binary.BigEndian, &dlen)
+		dataEnd := dataStart + (int(r.dlen) - 1)
+		r.data = buf[dataStart:dataEnd]
 
-		if len(buf) < int(dlen)+5 {
-			fmt.Println("Buffer shorter than expected length")
+		chkBytes := buf[2:dataEnd]
+		computedChk := computeChk(chkBytes)
+
+		// Skip over the data bytes
+		packetBuf.Next(int(r.dlen) - 1)
+		binary.Read(packetBuf, binary.BigEndian, &r.chk)
+
+		n = int(dataEnd) + 1
+
+		/*
+			Verify the check matches what we expect. If it doesn't match we return an
+			error and let the listener throw away the bad data.
+		*/
+		if computedChk != r.chk {
+			err = fmt.Errorf("Invalid check: expected %#x but got %#x", r.chk, computedChk)
 			return
 		}
 
-		mrspBuf := bytes.NewBuffer([]byte{buf[2]})
-		var mrsp uint8
-		binary.Read(mrspBuf, binary.BigEndian, &mrsp)
-
-		seqBuf := bytes.NewBuffer([]byte{buf[3]})
-		var seq uint8
-		binary.Read(seqBuf, binary.BigEndian, &seq)
-
-		dataEnd := 5 + (dlen - 1)
-		data := buf[5:dataEnd]
-
-		// Calculate the chk
-		chkSlice := buf[2:dataEnd]
-		compChk := ComputeChk(chkSlice)
-
-		chkBuf := bytes.NewBuffer([]byte{buf[dataEnd]})
-		var chk uint8
-		binary.Read(chkBuf, binary.BigEndian, &chk)
-
-		if compChk != chk {
-			err = fmt.Errorf("Invalid check, expected %#x, got %#x", chk, compChk, buf[2:dataEnd])
-			return
-		}
-
-		r := &Response{
-			sop1: sop1,
-			sop2: sop2,
-			mrsp: mrsp,
-			seq:  seq,
-			dlen: dlen,
-			data: data,
-			chk:  chk,
-		}
-		if res, ok := s.res[seq]; ok {
+		/*
+			Send the response over the channel associated with the seq number, if it
+			exists.
+		*/
+		if res, ok := s.res[r.seq]; ok {
 			res <- r
 		}
-		n = int(dataEnd) + 1
 	case SOP2_ASYNC:
 		if len(buf) < 7 {
-			fmt.Println("Async buffer too short, waiting for more", buf)
+			return
 		}
-		n = 1
-		/* ID_CODE = buffer[2]
-		   dlen = buffer.readUInt16BE(3)
-		   if buffer.length < dlen + 5 {
-		     return
-		   }
-		   startOfData = 5
-		   dataEnd = startOfData + (dlen - 1)
-		   endOfPacket = endOfData + 1
-		   DATA = buffer.slice(startOfData, endOfData)
-		   // msg = SOP2: SOP2, ID_CODE: ID_CODE, DATA: DATA
-		   r := &AsyncResponse{[]byte{sop1}, []byte{sop2}, []byte{id}, []byte{data}}
-		   s.async <- r
-		   n = int(dataEnd) + 1
-		 } */
+
+		var r *AsyncResponse
+		r.sop1 = sop1
+		r.sop2 = sop2
+		r.idCode = buf[2]
+
+		packetBuf := bytes.NewBuffer(buf)
+
+		// Skip the SOP bytes and ID CODE
+		packetBuf.Next(3)
+
+		binary.Read(packetBuf, binary.BigEndian, &r.dlenMSB)
+		binary.Read(packetBuf, binary.LittleEndian, &r.dlenLSB)
+
+		dataStart := 5
+
+		if len(buf) < int(r.dlenMSB)+dataStart {
+			return
+		}
+
+		dataEnd := dataStart + (int(r.dlenMSB) - 1)
+		r.data = buf[dataStart:dataEnd]
+
+		chkBytes := buf[2:dataEnd]
+		computedChk := computeChk(chkBytes)
+
+		// Skip over the data bytes
+		packetBuf.Next(int(r.dlenMSB) - 1)
+		binary.Read(packetBuf, binary.BigEndian, &r.chk)
+
+		n = int(dataEnd) + 1
+
+		/*
+			Verify the check matches what we expect. If it doesn't match we return an
+			error and let the listener throw away the bad data.
+		*/
+		if computedChk != r.chk {
+			err = fmt.Errorf("Invalid async check: expected %#x but got %#x", r.chk, computedChk)
+			return
+		}
+
+		s.async <- r
 	default:
 		err = fmt.Errorf("Unexpected SOP2, should be %#x or %#x but got %#x", SOP2_ANSWER, SOP2_ASYNC, sop2)
 		n = 1 // Chomp 1 byte and maybe we'll recover
@@ -139,30 +161,59 @@ func (s *Sphero) parse(buf []byte) (n int, err error) {
 func (s *Sphero) listen() {
 	var data []byte
 	var buf []byte
-	var err error
 	var n int
+	var err error
 
 	for {
 		select {
 		case <-s.kill:
-			fmt.Println("Killing goroutine")
 			return
 		default:
 			data = make([]byte, 256)
-			if n, err = s.Read(data); err != nil {
-				fmt.Println("Read:", err)
+
+			/*
+				Since EOF errors are expected when the Sphero indicates it doesn't
+				expect to send more data (e.g. all responses have been sent for commands
+				received so far and async responses are turned off).
+
+				EBADF errors are also expected if we've initiated a `Close` while `Read`
+				was blocking.
+			*/
+			if n, err = s.Read(data); err != nil && err != io.EOF {
+				if pathErr, ok := err.(*os.PathError); ok {
+					if pathErr.Err != syscall.EBADF {
+						panic(pathErr)
+					}
+				} else {
+					panic(err)
+				}
 			}
+
+			/*
+				Trim the 256 byte data by the number of bytes actually read and append
+				it to our buffer.
+			*/
 			if n > 0 {
 				data = data[:n]
 				buf = append(buf, data...)
 			}
-			if len(buf) > 1 {
-				if n, err = s.parse(buf); err != nil {
-					fmt.Println("Parse:", err)
-				}
-				if n > 0 {
-					buf = buf[n:]
-				}
+
+			/*
+				If our buffer is too short to form a meaningful response, we wait until
+				we've read more. Answers need to be at least 6 bytes, async responses
+				need to be at least 7.
+			*/
+			if len(buf) < 6 {
+				continue
+			}
+
+			if n, err = s.parse(buf); err != nil {
+				fmt.Println("Parse:", err)
+			}
+
+			// Trim our buffer by the number of bytes successfully parsed.
+			if n > 0 {
+				buf = buf[n:]
 			}
 		}
 	}
@@ -172,7 +223,7 @@ func (s *Sphero) listen() {
 
 // Implement io.Closer
 func (s *Sphero) Close() error {
-	s.kill <- true // Kill our goroutine
+	s.kill <- true // Signal to kill our goroutine
 	return s.conn.Close()
 }
 
@@ -202,10 +253,8 @@ func (s *Sphero) Send(did, cid uint8, data []byte, res chan<- *Response) error {
 		buf.Write(data)
 	}
 
-	chk := ComputeChk(buf.Bytes()[2:buf.Len()])
+	chk := computeChk(buf.Bytes()[2:buf.Len()])
 	binary.Write(&buf, binary.BigEndian, chk) // DLEN
-
-	fmt.Printf("Writing: %#x\n", buf.Bytes())
 
 	_, err := s.Write(buf.Bytes())
 	return err
@@ -270,7 +319,10 @@ func (s *Sphero) SetRGBLEDOutput(red, green, blue uint8, res chan<- *Response) e
 	binary.Write(&data, binary.BigEndian, red)
 	binary.Write(&data, binary.BigEndian, green)
 	binary.Write(&data, binary.BigEndian, blue)
-	data.Write([]byte{0x00}) // User flag - this would set the "user LED color" if 0x01
+
+	// User flag - 0x01 would set "user LED color"
+	data.Write([]byte{0x00})
+
 	return s.Send(DID_SPHERO, CMD_SET_RGB_LED, data.Bytes(), res)
 }
 

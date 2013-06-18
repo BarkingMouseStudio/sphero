@@ -16,37 +16,42 @@ func main() {
 
 	fmt.Println("Connecting...")
 
-	async := make(chan interface{})
+	async := make(chan *sphero.AsyncResponse, 256)
+	go func(async <-chan *sphero.AsyncResponse) {
+		for r := range async {
+			fmt.Println(r)
+		}
+	}(async)
+
 	var s *sphero.Sphero
 	if s, err = sphero.NewSphero(&conf, async); err != nil {
 		panic(err)
 	}
 
+	var res *sphero.Response
+	ch := make(chan *sphero.Response, 8)
+
 	fmt.Println("Pinging...")
-	ping := make(chan *sphero.Response)
-	s.Ping(ping)
-	pong := <-ping
-	fmt.Printf("Pong %#x\n", pong)
+	s.Ping(ch)
+	res = <-ch
+	fmt.Printf("Pong %#x\n", res)
 
 	fmt.Println("Setting color...")
-	setColor := make(chan *sphero.Response)
-	s.SetRGBLEDOutput(0, 0, 255, setColor)
-	r := <-setColor
-	fmt.Printf("Set Color %#x\n", r)
+	s.SetRGBLEDOutput(0, 0, 255, ch)
+	res = <-ch
+	fmt.Printf("Set Color %#x\n", res)
 
 	fmt.Println("Getting color...")
-	getColor := make(chan *sphero.Response)
-	s.GetRGBLED(getColor)
-	r = <-getColor
-	fmt.Printf("Get Color %#x\n", r)
+	s.GetRGBLED(ch)
+	res = <-ch
+	fmt.Printf("Get Color %#x\n", res)
 
 	<-time.Tick(10 * time.Second)
 
 	fmt.Println("Sleeping...")
-	sleep := make(chan *sphero.Response)
-	s.Sleep(time.Duration(0), 0, 0, sleep)
-	slept := <-sleep
-	fmt.Printf("Slept %#x\n", slept)
+	s.Sleep(time.Duration(0), 0, 0, ch)
+	res = <-ch
+	fmt.Printf("Slept %#x\n", res)
 
 	fmt.Println("Closing...")
 	s.Close()

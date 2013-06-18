@@ -3,6 +3,7 @@ package sphero
 import (
 	"errors"
 	serial "github.com/Freeflow/goserial"
+	"time"
 )
 
 var (
@@ -16,7 +17,7 @@ type Config struct {
 type Response struct {
 	sop1 byte
 	sop2 byte
-	mrsp uint8
+	mrsp byte
 	seq  uint8
 	dlen uint8
 	data []byte
@@ -33,7 +34,7 @@ type AsyncResponse struct {
 	chk     byte
 }
 
-type SimpleResponse uint8
+type SimpleResponse uint8 // MRSP
 
 type ColorResponse struct {
 	R, G, B uint8
