@@ -3,6 +3,7 @@ package sphero
 import (
 	"bytes"
 	"encoding/binary"
+	"errors"
 	"fmt"
 	serial "github.com/Freeflow/goserial"
 	"io"
