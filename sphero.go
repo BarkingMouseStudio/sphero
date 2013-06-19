@@ -16,32 +16,13 @@ var (
 	NotImplemented = errors.New("This feature is not yet implemented")
 )
 
-// Used to generate mask1 or mask2 for SetDataStreaming command
-func ApplyMasks32(masks []uint32) uint32 {
-	var mask uint32 = 0
-	for _, m := range masks {
-		mask |= m
-	}
-	return mask
-}
-
-// Computes the modulo 256 sum of the bytes, bit inverted (1's complement)
-func computeChk(data []byte) uint8 {
-	sum := 0
-	for _, b := range data {
-		sum += int(uint8(b))
-	}
-	chk := (sum % 256) ^ 0xff
-	return uint8(chk)
-}
-
 type Response struct {
 	sop1 byte
 	sop2 byte
 	mrsp byte
 	seq  uint8
 	dlen uint8
-	data []byte
+	Data []byte
 	chk  uint8
 }
 
@@ -50,7 +31,7 @@ type AsyncResponse struct {
 	sop2   byte
 	idCode byte
 	dlen   uint16
-	data   []byte
+	Data   []byte
 	chk    uint8
 }
 
@@ -123,10 +104,10 @@ func (s *Sphero) parse(buf []byte) (n int, err error) {
 		}
 
 		dataEnd := dataStart + (int(r.dlen) - 1)
-		r.data = buf[dataStart:dataEnd]
+		r.Data = buf[dataStart:dataEnd]
 
 		chkBytes := buf[2:dataEnd]
-		computedChk := computeChk(chkBytes)
+		computedChk := ComputeChk(chkBytes)
 
 		// Skip over the data bytes
 		packetBuf.Next(int(r.dlen) - 1)
@@ -166,7 +147,6 @@ func (s *Sphero) parse(buf []byte) (n int, err error) {
 		packetBuf.Next(3)
 
 		binary.Read(packetBuf, binary.BigEndian, &r.dlen)
-		fmt.Println("async dlen", r.dlen)
 
 		dataStart := 5
 
@@ -175,10 +155,10 @@ func (s *Sphero) parse(buf []byte) (n int, err error) {
 		}
 
 		dataEnd := dataStart + (int(r.dlen) - 1)
-		r.data = buf[dataStart:dataEnd]
+		r.Data = buf[dataStart:dataEnd]
 
 		chkBytes := buf[2:dataEnd]
-		computedChk := computeChk(chkBytes)
+		computedChk := ComputeChk(chkBytes)
 
 		// Skip over the data bytes
 		packetBuf.Next(int(r.dlen) - 1)
@@ -284,7 +264,9 @@ func (s *Sphero) Read(data []byte) (int, error) {
 
 func (s *Sphero) Send(did, cid uint8, data []byte, res chan<- *Response) error {
 	s.seq++
-	s.res[s.seq] = res
+	if res != nil {
+		s.res[s.seq] = res
+	}
 
 	var buf bytes.Buffer
 	buf.Write([]byte{SOP1})                                  // SOP1
@@ -298,7 +280,7 @@ func (s *Sphero) Send(did, cid uint8, data []byte, res chan<- *Response) error {
 		buf.Write(data)
 	}
 
-	chk := computeChk(buf.Bytes()[2:buf.Len()])
+	chk := ComputeChk(buf.Bytes()[2:buf.Len()])
 	binary.Write(&buf, binary.BigEndian, chk) // DLEN
 
 	_, err := s.Write(buf.Bytes())
@@ -367,14 +349,18 @@ func (s *Sphero) ReadLocator(res chan<- *Response) error {
 	return NotImplemented
 }
 
-func (s *Sphero) SetRGBLEDOutput(red, green, blue uint8, res chan<- *Response) error {
+func (s *Sphero) SetRGBLEDOutput(red, green, blue uint8, flag bool, res chan<- *Response) error {
 	var data bytes.Buffer
 	binary.Write(&data, binary.BigEndian, red)
 	binary.Write(&data, binary.BigEndian, green)
 	binary.Write(&data, binary.BigEndian, blue)
 
-	// User flag - 0x01 would set "user LED color"
-	data.Write([]byte{0x00})
+	// User flag - sets "user LED color"
+	if flag {
+		data.Write([]byte{0x01})
+	} else {
+		data.Write([]byte{0x00})
+	}
 
 	return s.Send(DID_SPHERO, CMD_SET_RGB_LED, data.Bytes(), res)
 }
@@ -395,4 +381,12 @@ func (s *Sphero) Roll() error {
 
 func (s *Sphero) SetRawMotorValues() error {
 	return NotImplemented
+}
+
+func (s *Sphero) SetPowerNotification(flag bool, res chan<- *Response) error {
+	data := make([]byte, 1)
+	if flag {
+		data[0] = 1
+	}
+	return s.Send(DID_SPHERO, CMD_SET_PWR_NOTIFY, data, res)
 }

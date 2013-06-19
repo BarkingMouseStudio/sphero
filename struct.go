@@ -8,7 +8,7 @@ import (
 
 type SimpleResponse uint8 // MRSP
 
-type ColorResponse struct {
+type Color struct {
 	R, G, B uint8
 }
 

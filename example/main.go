@@ -8,21 +8,6 @@ import (
 
 func main() {
 	fmt.Println("Connecting...")
-	mask1 := sphero.ApplyMasks32([]uint32{
-		sphero.ACCEL_AXIS_X_RAW, sphero.ACCEL_AXIS_Y_RAW, sphero.ACCEL_AXIS_Z_RAW,
-		sphero.GYRO_AXIS_X_RAW, sphero.GYRO_AXIS_Y_RAW, sphero.GYRO_AXIS_Z_RAW,
-		sphero.MOTOR_RIGHT_EMF_RAW, sphero.MOTOR_LEFT_EMF_RAW,
-		sphero.MOTOR_LEFT_PWM_RAW, sphero.MOTOR_RIGHT_PWM_RAW,
-		sphero.IMU_PITCH_ANGLE_FILTERED, sphero.IMU_ROLL_ANGLE_FILTERED, sphero.IMU_YAW_ANGLE_FILTERED,
-	})
-
-	mask2 := sphero.ApplyMasks32([]uint32{
-		sphero.QUATERNION_Q0, sphero.QUATERNION_Q1, sphero.QUATERNION_Q2, sphero.QUATERNION_Q3,
-		sphero.ODOMETER_X, sphero.ODOMETER_Y,
-		sphero.VELOCITY_X, sphero.VELOCITY_Y,
-	})
-	fmt.Printf("%#x %#x\n", mask1, mask2)
-	return
 
 	async := make(chan *sphero.AsyncResponse, 256)
 	go func() {
@@ -53,22 +38,29 @@ func main() {
 
 	// COLOR
 
-	fmt.Println("Setting color...")
-	s.SetRGBLEDOutput(0, 0, 255, ch)
+	/* fmt.Println("Setting color...")
+	s.SetRGBLEDOutput(0, 0, 255, true, ch)
 	res = <-ch
-	fmt.Printf("Set Color %#x\n", res)
+	fmt.Printf("Set Color %#x\n", res) */
 
 	fmt.Println("Getting color...")
 	s.GetRGBLED(ch)
 	res = <-ch
-	fmt.Printf("Get Color %#x\n", res)
+	c, _ := sphero.ParseColor(res.Data)
+	fmt.Printf("Get Color %#x\n", res, c)
+
+	fmt.Println("Power notifications...")
+	s.SetPowerNotification(true, ch)
+	res = <-ch
+	fmt.Printf("Power notification %#x\n", res)
 
 	// ASYNC
 
-	fmt.Println("Turning on async...")
-	// 1000ms / (400hz / 40hz) = 1 @ 100ms
-	// 1000ms / (400hz / 4hz) = 1 @ 10ms
-	s.SetDataStreaming(40, 0, mask1, 0, mask2, ch)
+	mask := sphero.ApplyMasks32([]uint32{
+		sphero.ACCEL_AXIS_X_RAW, sphero.ACCEL_AXIS_Y_RAW, sphero.ACCEL_AXIS_Z_RAW,
+	})
+	fmt.Printf("Set data streaming... %#x\n", mask)
+	s.SetDataStreaming(40, 1, mask, 0, 0, ch)
 	res = <-ch
 	fmt.Printf("Data streaming %#x\n", res)
 
