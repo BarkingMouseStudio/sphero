@@ -152,20 +152,25 @@ const (
 
 // MASK1
 const (
+	// Accelerometer measures per-axis force of gravity (e.g. shake gestures and collisions)
 	ACCEL_AXIS_X_RAW = 0x80000000
 	ACCEL_AXIS_Y_RAW = 0x40000000
 	ACCEL_AXIS_Z_RAW = 0x20000000
 
+	// Gyroscope measures orientation, based on angular momentum
 	GYRO_AXIS_X_RAW = 0x10000000
 	GYRO_AXIS_Y_RAW = 0x08000000
 	GYRO_AXIS_Z_RAW = 0x04000000
 
+	// Electromotive force is the electromotive force that pushes against the current which induces it (e.g. for ground speed)
 	MOTOR_RIGHT_EMF_RAW = 0x00400000
 	MOTOR_LEFT_EMF_RAW  = 0x00200000
 
+	// Pulse-width modulation
 	MOTOR_LEFT_PWM_RAW  = 0x00100000
 	MOTOR_RIGHT_PWM_RAW = 0x00080000
 
+	// IMU uses accelerometer and gyroscope to determine the orientation
 	IMU_PITCH_ANGLE_FILTERED = 0x00040000
 	IMU_ROLL_ANGLE_FILTERED  = 0x00020000
 	IMU_YAW_ANGLE_FILTERED   = 0x00010000
@@ -184,13 +189,20 @@ const (
 
 // MASK2
 const (
+	// Orientation as quaternion from accelerometer and gyroscope
 	QUATERNION_Q0 = 0x80000000
 	QUATERNION_Q1 = 0x40000000
 	QUATERNION_Q2 = 0x20000000
 	QUATERNION_Q3 = 0x10000000
-	ODOMETER_X    = 0x08000000
-	ODOMETER_Y    = 0x04000000
-	ACCEL_ONE     = 0x02000000
-	VELOCITY_X    = 0x01000000
-	VELOCITY_Y    = 0x00800000
+
+	// Distance traveled
+	ODOMETER_X = 0x08000000
+	ODOMETER_Y = 0x04000000
+
+	// Combined accelerometer field
+	ACCEL_ONE = 0x02000000
+
+	// Directional speed
+	VELOCITY_X = 0x01000000
+	VELOCITY_Y = 0x00800000
 )

@@ -46,41 +46,39 @@ type Response struct {
 }
 
 type AsyncResponse struct {
-	sop1    byte
-	sop2    byte
-	idCode  byte
-	dlenMSB byte
-	dlenLSB byte
-	data    []byte
-	chk     byte
-}
-
-type Config struct {
-	Bluetooth serial.Config
+	sop1   byte
+	sop2   byte
+	idCode byte
+	dlen   uint16
+	data   []byte
+	chk    uint8
 }
 
 type Sphero struct {
-	conf  *Config
 	conn  io.ReadWriteCloser
 	seq   uint8
 	res   map[uint8]chan<- *Response
-	kill  chan bool
+	kill  chan struct{}
 	async chan<- *AsyncResponse
 }
 
-func NewSphero(conf *Config, async chan<- *AsyncResponse) (*Sphero, error) {
+func NewSphero(name string, async chan<- *AsyncResponse) (*Sphero, error) {
+	conf := &serial.Config{
+		Name: name,
+		Baud: 115200,
+	}
+
 	var conn io.ReadWriteCloser
 	var err error
-	if conn, err = serial.OpenPort(&conf.Bluetooth); err != nil {
+	if conn, err = serial.OpenPort(conf); err != nil {
 		return nil, err
 	}
 
 	s := &Sphero{
-		conf:  conf,
 		conn:  conn,
 		seq:   0,
 		res:   make(map[uint8]chan<- *Response),
-		kill:  make(chan bool, 1),
+		kill:  make(chan struct{}, 1),
 		async: async,
 	}
 
@@ -101,7 +99,7 @@ func (s *Sphero) parse(buf []byte) (n int, err error) {
 
 	switch sop2 {
 	case SOP2_ANSWER:
-		var r *Response
+		r := new(Response)
 		r.sop1 = sop1
 		r.sop2 = sop2
 		r.mrsp = buf[2]
@@ -157,7 +155,7 @@ func (s *Sphero) parse(buf []byte) (n int, err error) {
 			return
 		}
 
-		var r *AsyncResponse
+		r := new(AsyncResponse)
 		r.sop1 = sop1
 		r.sop2 = sop2
 		r.idCode = buf[2]
@@ -167,23 +165,23 @@ func (s *Sphero) parse(buf []byte) (n int, err error) {
 		// Skip the SOP bytes and ID CODE
 		packetBuf.Next(3)
 
-		binary.Read(packetBuf, binary.BigEndian, &r.dlenMSB)
-		binary.Read(packetBuf, binary.LittleEndian, &r.dlenLSB)
+		binary.Read(packetBuf, binary.BigEndian, &r.dlen)
+		fmt.Println("async dlen", r.dlen)
 
 		dataStart := 5
 
-		if len(buf) < int(r.dlenMSB)+dataStart {
+		if len(buf) < int(r.dlen)+dataStart {
 			return
 		}
 
-		dataEnd := dataStart + (int(r.dlenMSB) - 1)
+		dataEnd := dataStart + (int(r.dlen) - 1)
 		r.data = buf[dataStart:dataEnd]
 
 		chkBytes := buf[2:dataEnd]
 		computedChk := computeChk(chkBytes)
 
 		// Skip over the data bytes
-		packetBuf.Next(int(r.dlenMSB) - 1)
+		packetBuf.Next(int(r.dlen) - 1)
 		binary.Read(packetBuf, binary.BigEndian, &r.chk)
 
 		n = int(dataEnd) + 1
@@ -199,8 +197,8 @@ func (s *Sphero) parse(buf []byte) (n int, err error) {
 
 		s.async <- r
 	default:
-		err = fmt.Errorf("Unexpected SOP2, should be %#x or %#x but got %#x", SOP2_ANSWER, SOP2_ASYNC, sop2)
 		n = 1 // Chomp 1 byte and maybe we'll recover
+		err = fmt.Errorf("Unexpected SOP2, should be %#x or %#x but got %#x", SOP2_ANSWER, SOP2_ASYNC, sop2)
 	}
 	return
 }
@@ -255,7 +253,7 @@ func (s *Sphero) listen() {
 			}
 
 			if n, err = s.parse(buf); err != nil {
-				fmt.Println("Parse:", err)
+				fmt.Println("Failed to parse:", err)
 			}
 
 			// Trim our buffer by the number of bytes successfully parsed.
@@ -270,7 +268,7 @@ func (s *Sphero) listen() {
 
 // Implement io.Closer
 func (s *Sphero) Close() error {
-	s.kill <- true // Signal to kill our goroutine
+	s.kill <- struct{}{} // Signal to kill our goroutine
 	return s.conn.Close()
 }
 
@@ -339,6 +337,14 @@ func (s *Sphero) SelfLevel() error {
 	return NotImplemented
 }
 
+/*
+	SetDataStreaming - turns on async data streaming from sensors.
+	N = Divisor of the maximum sensor sampling rate (e.g. 400hz / N)
+	M = Number of sample frames emitted per packet
+	MASK = Bitwise selector of data sources to stream
+	PCNT = Packet count 1-255 (or 0 for unlimited streaming)
+	MASK2 = Bitwise selector of more data sources to stream (optional)
+*/
 func (s *Sphero) SetDataStreaming(n, m int16, mask uint32, pcnt uint8, mask2 uint32, res chan<- *Response) error {
 	var data bytes.Buffer
 	binary.Write(&data, binary.BigEndian, n)
