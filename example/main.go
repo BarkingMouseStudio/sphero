@@ -20,7 +20,7 @@ func main() {
 	var s *sphero.Sphero
 	if s, err = sphero.NewSphero("/dev/cu.Sphero-YBR-RN-SPP", async); err != nil {
 		fmt.Println(err)
-		fmt.Println("NOTE: Try toggling your Bluetooth or putting the Sphero asleep (and reawakening) to fix 'resource busy' errors")
+		fmt.Println("NOTE: Try toggling Bluetooth and/or Sphero to fix 'resource busy' errors")
 		return
 	}
 
@@ -38,10 +38,10 @@ func main() {
 
 	// COLOR
 
-	/* fmt.Println("Setting color...")
-	s.SetRGBLEDOutput(0, 0, 255, true, ch)
+	fmt.Println("Setting color...")
+	s.SetRGBLEDOutput(0, 0, 255, false, ch)
 	res = <-ch
-	fmt.Printf("Set Color %#x\n", res) */
+	fmt.Printf("Set Color %#x\n", res)
 
 	fmt.Println("Getting color...")
 	s.GetRGBLED(ch)
@@ -49,22 +49,7 @@ func main() {
 	c, _ := sphero.ParseColor(res.Data)
 	fmt.Printf("Get Color %#x\n", res, c)
 
-	fmt.Println("Power notifications...")
-	s.SetPowerNotification(true, ch)
-	res = <-ch
-	fmt.Printf("Power notification %#x\n", res)
-
-	// ASYNC
-
-	mask := sphero.ApplyMasks32([]uint32{
-		sphero.ACCEL_AXIS_X_RAW, sphero.ACCEL_AXIS_Y_RAW, sphero.ACCEL_AXIS_Z_RAW,
-	})
-	fmt.Printf("Set data streaming... %#x\n", mask)
-	s.SetDataStreaming(40, 1, mask, 0, 0, ch)
-	res = <-ch
-	fmt.Printf("Data streaming %#x\n", res)
-
-	<-time.Tick(10 * time.Second)
+	<-time.Tick(3 * time.Second)
 
 	// CLEANUP
 
