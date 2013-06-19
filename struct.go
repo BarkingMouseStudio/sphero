@@ -8,8 +8,14 @@ import (
 
 type SimpleResponse uint8 // MRSP
 
-type Color struct {
+type ColorResponse struct {
 	R, G, B uint8
+}
+
+type PowerStateResponse struct {
+	RecVer, PowerState      uint8
+	BattVoltage, NumCharges uint16
+	TimeSinceChg            time.Duration
 }
 
 type LocatorResponse struct {

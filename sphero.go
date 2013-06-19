@@ -383,6 +383,10 @@ func (s *Sphero) SetRawMotorValues() error {
 	return NotImplemented
 }
 
+func (s *Sphero) GetPowerState(res chan<- *Response) error {
+	return s.Send(DID_CORE, CMD_GET_PWR_STATE, nil, res)
+}
+
 func (s *Sphero) SetPowerNotification(flag bool, res chan<- *Response) error {
 	data := make([]byte, 1)
 	if flag {

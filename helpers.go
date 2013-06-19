@@ -15,10 +15,10 @@ func ApplyMasks32(masks []uint32) uint32 {
 	return mask
 }
 
-func ParseColor(data []byte) (*Color, error) {
-	c := new(Color)
+func ParseColor(data []byte) (*ColorResponse, error) {
+	c := new(ColorResponse)
 	if len(data) != 3 {
-		return c, fmt.Errorf("Could not format %#x as Color", c)
+		return c, fmt.Errorf("Could not format %#x as ColorResponse", c)
 	}
 	buf := bytes.NewBuffer(data)
 	binary.Read(buf, binary.BigEndian, &c.R)
