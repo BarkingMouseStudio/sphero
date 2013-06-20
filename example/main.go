@@ -46,7 +46,7 @@ func main() {
 	fmt.Println("Getting color...")
 	s.GetRGBLED(ch)
 	res = <-ch
-	c, _ := sphero.ParseColor(res.Data)
+	c, _ := res.Color()
 	fmt.Printf("Get Color %#x\n", res, c)
 
 	<-time.Tick(3 * time.Second)

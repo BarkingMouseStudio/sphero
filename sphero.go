@@ -3,7 +3,6 @@ package sphero
 import (
 	"bytes"
 	"encoding/binary"
-	"errors"
 	"fmt"
 	serial "github.com/Freeflow/goserial"
 	"io"
@@ -11,29 +10,6 @@ import (
 	"syscall"
 	"time"
 )
-
-var (
-	NotImplemented = errors.New("This feature is not yet implemented")
-)
-
-type Response struct {
-	sop1 byte
-	sop2 byte
-	mrsp byte
-	seq  uint8
-	dlen uint8
-	Data []byte
-	chk  uint8
-}
-
-type AsyncResponse struct {
-	sop1   byte
-	sop2   byte
-	idCode byte
-	dlen   uint16
-	Data   []byte
-	chk    uint8
-}
 
 type Sphero struct {
 	conn  io.ReadWriteCloser
@@ -73,6 +49,7 @@ func (s *Sphero) parse(buf []byte) (n int, err error) {
 
 	if sop1 != SOP1 {
 		err = fmt.Errorf("SOP1 must be FFh but got %p", sop1)
+		n = 1 // Chomp 1 byte and maybe we'll recover
 		return
 	}
 
@@ -81,17 +58,17 @@ func (s *Sphero) parse(buf []byte) (n int, err error) {
 	switch sop2 {
 	case SOP2_ANSWER:
 		r := new(Response)
-		r.sop1 = sop1
-		r.sop2 = sop2
-		r.mrsp = buf[2]
+		r.Sop1 = sop1
+		r.Sop2 = sop2
+		r.Mrsp = buf[2]
 
 		packetBuf := bytes.NewBuffer(buf)
 
 		// Skip the SOP bytes and MRSP
 		packetBuf.Next(3)
 
-		binary.Read(packetBuf, binary.BigEndian, &r.seq)
-		binary.Read(packetBuf, binary.BigEndian, &r.dlen)
+		binary.Read(packetBuf, binary.BigEndian, &r.Seq)
+		binary.Read(packetBuf, binary.BigEndian, &r.Dlen)
 
 		dataStart := 5
 
@@ -99,19 +76,19 @@ func (s *Sphero) parse(buf []byte) (n int, err error) {
 			We haven't read enough data yet to finish parsing this message, we'll wait
 			for more.
 		*/
-		if len(buf) < int(r.dlen)+dataStart {
+		if len(buf) < int(r.Dlen)+dataStart {
 			return
 		}
 
-		dataEnd := dataStart + (int(r.dlen) - 1)
+		dataEnd := dataStart + (int(r.Dlen) - 1)
 		r.Data = buf[dataStart:dataEnd]
 
 		chkBytes := buf[2:dataEnd]
-		computedChk := ComputeChk(chkBytes)
+		computedChk := computeChk(chkBytes)
 
 		// Skip over the data bytes
-		packetBuf.Next(int(r.dlen) - 1)
-		binary.Read(packetBuf, binary.BigEndian, &r.chk)
+		packetBuf.Next(int(r.Dlen) - 1)
+		binary.Read(packetBuf, binary.BigEndian, &r.Chk)
 
 		n = int(dataEnd) + 1
 
@@ -119,8 +96,8 @@ func (s *Sphero) parse(buf []byte) (n int, err error) {
 			Verify the check matches what we expect. If it doesn't match we return an
 			error and let the listener throw away the bad data.
 		*/
-		if computedChk != r.chk {
-			err = fmt.Errorf("Invalid check: expected %#x but got %#x", r.chk, computedChk)
+		if computedChk != r.Chk {
+			err = fmt.Errorf("Invalid check: expected %#x but got %#x", r.Chk, computedChk)
 			return
 		}
 
@@ -128,7 +105,7 @@ func (s *Sphero) parse(buf []byte) (n int, err error) {
 			Send the response over the channel associated with the seq number, if it
 			exists.
 		*/
-		if res, ok := s.res[r.seq]; ok {
+		if res, ok := s.res[r.Seq]; ok {
 			res <- r
 		}
 	case SOP2_ASYNC:
@@ -137,32 +114,32 @@ func (s *Sphero) parse(buf []byte) (n int, err error) {
 		}
 
 		r := new(AsyncResponse)
-		r.sop1 = sop1
-		r.sop2 = sop2
-		r.idCode = buf[2]
+		r.Sop1 = sop1
+		r.Sop2 = sop2
+		r.IdCode = buf[2]
 
 		packetBuf := bytes.NewBuffer(buf)
 
 		// Skip the SOP bytes and ID CODE
 		packetBuf.Next(3)
 
-		binary.Read(packetBuf, binary.BigEndian, &r.dlen)
+		binary.Read(packetBuf, binary.BigEndian, &r.Dlen)
 
 		dataStart := 5
 
-		if len(buf) < int(r.dlen)+dataStart {
+		if len(buf) < int(r.Dlen)+dataStart {
 			return
 		}
 
-		dataEnd := dataStart + (int(r.dlen) - 1)
+		dataEnd := dataStart + (int(r.Dlen) - 1)
 		r.Data = buf[dataStart:dataEnd]
 
 		chkBytes := buf[2:dataEnd]
-		computedChk := ComputeChk(chkBytes)
+		computedChk := computeChk(chkBytes)
 
 		// Skip over the data bytes
-		packetBuf.Next(int(r.dlen) - 1)
-		binary.Read(packetBuf, binary.BigEndian, &r.chk)
+		packetBuf.Next(int(r.Dlen) - 1)
+		binary.Read(packetBuf, binary.BigEndian, &r.Chk)
 
 		n = int(dataEnd) + 1
 
@@ -170,8 +147,8 @@ func (s *Sphero) parse(buf []byte) (n int, err error) {
 			Verify the check matches what we expect. If it doesn't match we return an
 			error and let the listener throw away the bad data.
 		*/
-		if computedChk != r.chk {
-			err = fmt.Errorf("Invalid async check: expected %#x but got %#x", r.chk, computedChk)
+		if computedChk != r.Chk {
+			err = fmt.Errorf("Invalid async check: expected %#x but got %#x", r.Chk, computedChk)
 			return
 		}
 
@@ -280,14 +257,14 @@ func (s *Sphero) Send(did, cid uint8, data []byte, res chan<- *Response) error {
 		buf.Write(data)
 	}
 
-	chk := ComputeChk(buf.Bytes()[2:buf.Len()])
+	chk := computeChk(buf.Bytes()[2:buf.Len()])
 	binary.Write(&buf, binary.BigEndian, chk) // DLEN
 
 	_, err := s.Write(buf.Bytes())
 	return err
 }
 
-// Core
+// Device: Core
 
 func (s *Sphero) Ping(res chan<- *Response) error {
 	return s.Send(DID_CORE, CMD_PING, nil, res)
@@ -301,22 +278,31 @@ func (s *Sphero) Sleep(wakeup time.Duration, macro uint8, orbBasic uint16, res c
 	return s.Send(DID_CORE, CMD_SLEEP, data.Bytes(), res)
 }
 
-// Sphero
+// Device: Sphero
 
-func (s *Sphero) SetHeading() error {
-	return NotImplemented
+func (s *Sphero) SetHeading(heading int16, res chan<- *Response) error {
+	if heading > 359 || heading < 0 {
+		return fmt.Errorf("Invalid heading: %d - must be between 0 and 359 (inclusive)", heading)
+	}
+	var data bytes.Buffer
+	binary.Write(&data, binary.BigEndian, heading)
+	return s.Send(DID_CORE, CMD_SLEEP, data.Bytes(), res)
 }
 
-func (s *Sphero) SetStabilization() error {
-	return NotImplemented
+func (s *Sphero) SetStabilization(flag bool, res chan<- *Response) error {
+	data := make([]byte, 1)
+	if flag {
+		data[0] = 0x01
+	}
+	return s.Send(DID_SPHERO, CMD_SET_STABILIZ, data, res)
 }
 
 func (s *Sphero) SetRotationRate(rate uint8, res chan<- *Response) error {
-	return NotImplemented
+	return NotImplementedError
 }
 
 func (s *Sphero) SelfLevel() error {
-	return NotImplemented
+	return NotImplementedError
 }
 
 /*
@@ -327,7 +313,10 @@ func (s *Sphero) SelfLevel() error {
 	PCNT = Packet count 1-255 (or 0 for unlimited streaming)
 	MASK2 = Bitwise selector of more data sources to stream (optional)
 */
-func (s *Sphero) SetDataStreaming(n, m int16, mask uint32, pcnt uint8, mask2 uint32, res chan<- *Response) error {
+func (s *Sphero) SetDataStreaming(n, m int16, masks []uint32, pcnt uint8, masks2 []uint32, res chan<- *Response) error {
+	mask := applyMasks32(masks)
+	mask2 := applyMasks32(masks2)
+
 	var data bytes.Buffer
 	binary.Write(&data, binary.BigEndian, n)
 	binary.Write(&data, binary.BigEndian, m)
@@ -338,15 +327,15 @@ func (s *Sphero) SetDataStreaming(n, m int16, mask uint32, pcnt uint8, mask2 uin
 }
 
 func (s *Sphero) ConfigureCollisionDetection(method, xThreshold, xSpeed, yThreshold, ySpeed, deadTime uint8, res chan<- *Response) error {
-	return NotImplemented
+	return NotImplementedError
 }
 
 func (s *Sphero) ConfigureLocator(flags uint8, x, y, yawTare uint16, res chan<- *Response) error {
-	return NotImplemented
+	return NotImplementedError
 }
 
 func (s *Sphero) ReadLocator(res chan<- *Response) error {
-	return NotImplemented
+	return NotImplementedError
 }
 
 func (s *Sphero) SetRGBLEDOutput(red, green, blue uint8, flag bool, res chan<- *Response) error {
@@ -371,16 +360,17 @@ func (s *Sphero) SetBackLEDOutput(brightness uint8, res chan<- *Response) error 
 	return s.Send(DID_SPHERO, CMD_SET_BACK_LED, data.Bytes(), res)
 }
 
+// Returns the "user LED color"
 func (s *Sphero) GetRGBLED(res chan<- *Response) error {
 	return s.Send(DID_SPHERO, CMD_GET_RGB_LED, nil, res)
 }
 
 func (s *Sphero) Roll() error {
-	return NotImplemented
+	return NotImplementedError
 }
 
 func (s *Sphero) SetRawMotorValues() error {
-	return NotImplemented
+	return NotImplementedError
 }
 
 func (s *Sphero) GetPowerState(res chan<- *Response) error {
@@ -390,7 +380,7 @@ func (s *Sphero) GetPowerState(res chan<- *Response) error {
 func (s *Sphero) SetPowerNotification(flag bool, res chan<- *Response) error {
 	data := make([]byte, 1)
 	if flag {
-		data[0] = 1
+		data[0] = 0x01
 	}
 	return s.Send(DID_SPHERO, CMD_SET_PWR_NOTIFY, data, res)
 }
