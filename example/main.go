@@ -3,6 +3,8 @@ package main
 import (
 	"fmt"
 	"github.com/Freeflow/sphero"
+	"os"
+	"os/signal"
 	"time"
 )
 
@@ -54,7 +56,7 @@ func main() {
 	// Enable data streaming - async messages are captured in the above goroutine
 	fmt.Println("Enabling streaming...")
 	// 400hz / (N = 400): 1hz or 1 async response per second
-	s.SetDataStreaming(400, 1, []uint32{sphero.ACCEL_RAW}, 0, []uint32{}, ch)
+	s.SetDataStreaming(400, 1, 0, []uint32{sphero.ACCEL_RAW}, []uint32{}, ch)
 	res = <-ch
 	fmt.Printf("Streaming enabled %#x\n", res)
 
