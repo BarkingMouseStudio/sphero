@@ -210,7 +210,7 @@ func (s *Sphero) listen() {
 			}
 
 			if n, err = s.parse(buf); err != nil {
-				fmt.Println("Failed to parse:", err)
+				fmt.Println(err)
 			}
 
 			// Trim our buffer by the number of bytes successfully parsed.
@@ -307,13 +307,13 @@ func (s *Sphero) SelfLevel() error {
 
 /*
 	SetDataStreaming - turns on async data streaming from sensors.
-	N = Divisor of the maximum sensor sampling rate (e.g. 400hz / N)
-	M = Number of sample frames emitted per packet
-	MASK = Bitwise selector of data sources to stream
-	PCNT = Packet count 1-255 (or 0 for unlimited streaming)
-	MASK2 = Bitwise selector of more data sources to stream (optional)
+	n - Divisor of the maximum sensor sampling rate (e.g. 400hz / N)
+	m - Number of sample frames emitted per packet
+	masks - See const.go for valid masks
+	pcnt - Packet count 1-255 (or 0 for unlimited streaming)
+	masks2 - See const.go for valid masks
 */
-func (s *Sphero) SetDataStreaming(n, m int16, masks []uint32, pcnt uint8, masks2 []uint32, res chan<- *Response) error {
+func (s *Sphero) SetDataStreaming(n, m int16, pcnt uint8, masks []uint32, masks2 []uint32, res chan<- *Response) error {
 	mask := applyMasks32(masks)
 	mask2 := applyMasks32(masks2)
 
@@ -360,7 +360,7 @@ func (s *Sphero) SetBackLEDOutput(brightness uint8, res chan<- *Response) error 
 	return s.Send(DID_SPHERO, CMD_SET_BACK_LED, data.Bytes(), res)
 }
 
-// Returns the "user LED color"
+// Returns the "user LED color". The color displayed after a successful bluetooth connection.
 func (s *Sphero) GetRGBLED(res chan<- *Response) error {
 	return s.Send(DID_SPHERO, CMD_GET_RGB_LED, nil, res)
 }
@@ -373,10 +373,12 @@ func (s *Sphero) SetRawMotorValues() error {
 	return NotImplementedError
 }
 
+// Gets the current power state of the device. See `Response.PowerState()`.
 func (s *Sphero) GetPowerState(res chan<- *Response) error {
 	return s.Send(DID_CORE, CMD_GET_PWR_STATE, nil, res)
 }
 
+// Turns on async power notifications.
 func (s *Sphero) SetPowerNotification(flag bool, res chan<- *Response) error {
 	data := make([]byte, 1)
 	if flag {
