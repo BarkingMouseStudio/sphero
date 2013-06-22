@@ -8,6 +8,10 @@ import (
 	"time"
 )
 
+type SensorData struct {
+	AccelX, AccelY, AccelZ int16
+}
+
 func main() {
 	sig := make(chan os.Signal, 1)
 	signal.Notify(sig, os.Interrupt)
@@ -15,8 +19,10 @@ func main() {
 	// Set up a basic async listener
 	async := make(chan *sphero.AsyncResponse, 256)
 	go func() {
+		var d SensorData
 		for r := range async {
-			fmt.Printf("Async: %#v\n", r)
+			r.Sensors(&d)
+			fmt.Printf("Async: %#v\n", r, d)
 		}
 	}()
 

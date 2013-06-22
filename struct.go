@@ -123,7 +123,7 @@ Example:
 */
 func (r *AsyncResponse) Sensors(d interface{}) error {
 	buf := bytes.NewBuffer(r.Data)
-	return binary.Read(buf, binary.BigEndian, &d)
+	return binary.Read(buf, binary.BigEndian, d)
 }
 
 /*
