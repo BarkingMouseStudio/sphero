@@ -314,8 +314,13 @@ func (s *Sphero) SelfLevel() error {
 	masks2 - See const.go for valid masks
 */
 func (s *Sphero) SetDataStreaming(n, m int16, pcnt uint8, masks []uint32, masks2 []uint32, res chan<- *Response) error {
-	mask := applyMasks32(masks)
-	mask2 := applyMasks32(masks2)
+	var mask, mask2 uint32
+	if masks != nil {
+		mask = applyMasks32(masks)
+	}
+	if masks2 != nil {
+		mask2 = applyMasks32(masks2)
+	}
 
 	var data bytes.Buffer
 	binary.Write(&data, binary.BigEndian, n)
@@ -326,8 +331,19 @@ func (s *Sphero) SetDataStreaming(n, m int16, pcnt uint8, masks []uint32, masks2
 	return s.Send(DID_SPHERO, CMD_SET_DATA_STREAMING, data.Bytes(), res)
 }
 
-func (s *Sphero) ConfigureCollisionDetection(method, xThreshold, xSpeed, yThreshold, ySpeed, deadTime uint8, res chan<- *Response) error {
-	return NotImplementedError
+/*
+	ConfigureCollisionDetection
+	method - Currently this must be either 0x01 (enabled) or 0x00 (disabled)
+*/
+func (s *Sphero) ConfigureCollisionDetection(method, xThreshold, yThreshold, xSpeed, ySpeed, deadTime uint8, res chan<- *Response) error {
+	var data bytes.Buffer
+	binary.Write(&data, binary.BigEndian, method)
+	binary.Write(&data, binary.BigEndian, xThreshold)
+	binary.Write(&data, binary.BigEndian, xSpeed)
+	binary.Write(&data, binary.BigEndian, yThreshold)
+	binary.Write(&data, binary.BigEndian, ySpeed)
+	binary.Write(&data, binary.BigEndian, deadTime)
+	return s.Send(DID_SPHERO, CMD_SET_COLLISION_DET, data.Bytes(), res)
 }
 
 func (s *Sphero) ConfigureLocator(flags uint8, x, y, yawTare uint16, res chan<- *Response) error {

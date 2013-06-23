@@ -4,7 +4,6 @@ import (
 	"bytes"
 	"encoding/binary"
 	"fmt"
-	"time"
 )
 
 // Represents the response from a command.
@@ -147,7 +146,7 @@ func (r *AsyncResponse) Location() (*Location, error) {
 func (r *AsyncResponse) Collision() (*Collision, error) {
 	c := new(Collision)
 	if len(r.Data) != binary.Size(c) {
-		return c, fmt.Errorf("Could not parse %#x as Collision", c)
+		return c, fmt.Errorf("Could not parse %#x as Collision", r.Data)
 	}
 	buf := bytes.NewBuffer(r.Data)
 	binary.Read(buf, binary.BigEndian, c)
@@ -176,5 +175,5 @@ type Collision struct {
 	Axis       uint8
 	XMag, YMag int16
 	Speed      uint8
-	Time       time.Time
+	TimeStamp  int32
 }
