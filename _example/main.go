@@ -2,7 +2,7 @@ package main
 
 import (
 	"fmt"
-	"github.com/Freeflow/sphero"
+	"github.com/FreeFlow/sphero"
 	"os"
 	"os/signal"
 	"time"

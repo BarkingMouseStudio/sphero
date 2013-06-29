@@ -6,7 +6,7 @@ import (
 	"bytes"
 	"encoding/binary"
 	"fmt"
-	serial "github.com/Freeflow/goserial"
+	serial "github.com/FreeFlow/goserial"
 	"io"
 	"os"
 	"syscall"
