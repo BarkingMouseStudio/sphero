@@ -5,6 +5,9 @@ Unofficial Go library for the Sphero.
 
 `go get github.com/FreeFlow/sphero`
 
+Docs: http://godoc.org/github.com/FreeFlow/sphero
+
+
 Support
 ---
 
