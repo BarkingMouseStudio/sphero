@@ -16,7 +16,7 @@ const (
 	DID_SPHERO     = 0x02
 )
 
-// Core Commands, DID = 00h
+// Core Commands - DID: 0x00
 const (
 	CMD_PING               = 0x01
 	CMD_VERSION            = 0x02
@@ -39,7 +39,7 @@ const (
 	CMD_POLL_TIMES         = 0x51
 )
 
-// Bootloader Commands, DID = 01h
+// Bootloader Commands - DID: 0x01
 const (
 	BEGIN_REFLASH         = 0x02
 	HERE_IS_PAGE          = 0x03
@@ -48,7 +48,7 @@ const (
 	CMD_ERASE_USER_CONFIG = 0x06
 )
 
-// Sphero Commands, DID = 02h
+// Sphero Commands - DID: 0x02
 const (
 	CMD_SET_CAL                 = 0x01
 	CMD_SET_STABILIZ            = 0x02
@@ -148,9 +148,7 @@ const (
 	POWER_MASK_TIMESINCECHG = 0x06 // Seconds awake since last recharge (unsigned 16-bit value)
 )
 
-// Data Streaming Masks
-
-// MASK1
+// Data Streaming Masks - MASK1
 const (
 	// Accelerometer measures per-axis force of gravity (e.g. shake gestures and collisions)
 	ACCEL_AXIS_X_RAW = 0x80000000
@@ -195,7 +193,7 @@ const (
 	MOTOR_EMF_FILTERED       = 0x00000060
 )
 
-// MASK2
+// Data Streaming Masks - MASK2
 const (
 	// Orientation as quaternion from accelerometer and gyroscope
 	QUATERNION_Q0 = 0x80000000

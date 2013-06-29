@@ -1,3 +1,5 @@
+// Package sphero provides an api for connecting and
+// communicating with Sphero robots.
 package sphero
 
 import (
@@ -11,6 +13,7 @@ import (
 	"time"
 )
 
+// Sphero represents a connection to a single Sphero robot.
 type Sphero struct {
 	conn  io.ReadWriteCloser
 	seq   uint8
@@ -19,6 +22,9 @@ type Sphero struct {
 	async chan<- *AsyncResponse
 }
 
+// NewSphero creates and initializes a Sphero connection. It will attempt
+// to connect to the device at the `name` provided or throw an error if
+// this fails.
 func NewSphero(name string, async chan<- *AsyncResponse) (*Sphero, error) {
 	conf := &serial.Config{
 		Name: name,
@@ -44,6 +50,7 @@ func NewSphero(name string, async chan<- *AsyncResponse) (*Sphero, error) {
 	return s, nil
 }
 
+// Parse processes an incoming response.
 func (s *Sphero) parse(buf []byte) (n int, err error) {
 	sop1 := buf[0]
 

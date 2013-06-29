@@ -6,7 +6,7 @@ import (
 	"fmt"
 )
 
-// Represents the response from a command.
+// Represents a command response.
 type Response struct {
 	Sop1 byte
 	Sop2 byte
@@ -17,7 +17,7 @@ type Response struct {
 	Chk  uint8
 }
 
-// Returns the appropriate error from the MRSP if any.
+// Returns the appropriate error from the message response (MRSP) field, if any.
 func (r *Response) Error() (err error) {
 	switch r.Mrsp {
 	case ORBOTIX_RSP_CODE_OK:
@@ -100,25 +100,8 @@ type AsyncResponse struct {
 }
 
 /*
-Unpacks sensor data from an async response.
-This method may be inaccurate or fail if the data doesn't represent sensor data.
-
-Example:
-
-	// Define a struct containing the fields you used for each mask value in SetDataStreaming.
-	type SensorData struct {
-		// The field names don't matter but the order should match the defined order in the Sphero API spec.
-		AccelX, AccelY, AccelZ int16
-
-		// Also, you can ignore fields by giving them the name `_`. Sensor fields are each `int16`.
-		_ int16
-	}
-
-	// Then given an `AsyncResponse`, you could call `Sensors`
-	var data SensorData
-	if err := r.Sensors(&data); err != nil {
-		// Handle error
-	}
+	Unpacks sensor data from an async response.
+	This method may be inaccurate or fail if the data doesn't represent sensor data.
 */
 func (r *AsyncResponse) Sensors(d interface{}) error {
 	buf := bytes.NewBuffer(r.Data)
@@ -127,7 +110,8 @@ func (r *AsyncResponse) Sensors(d interface{}) error {
 
 /*
 	Parses the data portion of the async response into a Location struct.
-	This method may be inaccurate or fail if the data doesn't represent a location.
+	This method may be inaccurate or fail if the data doesn't represent a
+	location.
 */
 func (r *AsyncResponse) Location() (*Location, error) {
 	loc := new(Location)
@@ -141,7 +125,8 @@ func (r *AsyncResponse) Location() (*Location, error) {
 
 /*
 	Parses the data portion of the async response into a Collision struct.
-	This method may be inaccurate or fail if the data doesn't represent a collision.
+	This method may be inaccurate or fail if the data doesn't represent a
+	collision.
 */
 func (r *AsyncResponse) Collision() (*Collision, error) {
 	c := new(Collision)

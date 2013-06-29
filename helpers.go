@@ -9,8 +9,9 @@ func applyMasks32(masks []uint32) uint32 {
 	return mask
 }
 
-// Computes the modulo 256 sum of the bytes, bit inverted (1's complement).
-// The value is used as a verification on commands and responses.
+// Computes the modulo 256 sum of the bytes, bit inverted
+// (1's complement). The value is used as a verification
+// on commands and responses.
 func computeChk(data []byte) uint8 {
 	sum := 0
 	for _, b := range data {
