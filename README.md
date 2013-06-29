@@ -3,7 +3,7 @@ Sphero
 
 Unofficial Go library for the Sphero.
 
-Some commands are still missing but all of the structure is in place to fill in the remaining commands.
+`go get github.com/FreeFlow/sphero`
 
 Support
 ---
